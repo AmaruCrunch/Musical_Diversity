@@ -12,3 +12,5 @@ Previous draft of the proposal, for documentation purposes
 #### 3.workshop.Rmd
 Unorganized data analysis, for documentation and future research
 
+#### 3.ModelingMusicalDiversity.pdf
+Final assignment
