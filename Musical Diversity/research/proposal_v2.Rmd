@@ -1,0 +1,442 @@
+---
+title: 'Exploring the correlations between the music we hear and our happinness'
+author: "Team E"
+date: '2022-05-20'
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+always_allow_html: true
+---
+
+## 1. Introduction
+The digitization of music has changed how we consume, produce, and distribute music. Spotify, in particular has had a immense effect on musical trends across the globe. One of the primary reasons for Spotify's success has been its amazing recommendation system. The sophisticated technology that drives Spotify’s recommendation system is based on collaborative filtering and NLP. This technology helps Spotify mix and match your music recommendations especially for you with a very high success rate. 
+
+Based off the research we did, one of the primary factors in creating your musical recommendation is your country. We like music that is familiar to us in music and language. We also want to lessen to the same music as our friends and family. 
+
+How do musical trends in country's develop? Why is the music you would hear on a beach in Costa-Rica different than the music you would hear in a club in Copenhagen?
+There are obvious reasons, like the fact that Spanish is a prettier language than Danish, but are there other underlying reasons? If music is a reflection of culture can we learn about the culture from the music? We would like to see if we can find a connection between the quality of life, as measured by the world happiness report and music trends.
+
+We will base our research on data from the Kaggle dataset "world-happiness-report-2021" for our quality of life data.
+For our musical data, we will use the Spotify API to pull the top 50 most popular songs in each country.
+The musical data we pulled is primarily made out of a set of metrics, explained in the data section. we will attempt to profile both the musical trends and the Quality of life metrics in each country and look for a correlation between them.
+
+Spotify API givess us access to a wide variety of features to learn about the variety of music and salient features of each country's music. We would like to know if most of the music is in a foreign language or local music, whether it is rhythmic and dancing music or not, and depending on those look for correlation to the happiness index in that country in the Happiness Index database.
+
+```{r, include=FALSE}
+options(tinytex.verbose = TRUE)
+knitr::opts_chunk$set(message = FALSE,  warning=FALSE, echo=FALSE)
+```
+
+```{r, load-packages, message = FALSE, , warning=FALSE, echo=FALSE}
+#TODO: CLEAN ME! - Yonatan
+library(webshot)
+library(tinytex)
+library(knitr) # knit to PDF
+library(spotifyr)# for pulling track audio features and info from Spotify’s Web API.
+library(vembedr)
+library(magrittr)
+library(cluster)
+library(cluster.datasets)
+library(cowplot)
+library(NbClust)
+library(clValid)
+library(ggfortify)
+library(dendextend)
+library(factoextra)
+library(FactoMineR)
+
+library(GGally)
+library(ggiraphExtra)
+
+
+# graphical and visualization libraries:
+library(tidyverse)
+library(wordcloud2) # fast visualization tool for creating word cloud
+library(ggplot2)# creating graphics
+library(ggridges) # for visualizing changes
+library(tidytext)
+
+suppressPackageStartupMessages(library(dplyr))
+library(scales)
+library(yarrr) # visualizing features
+library(gridExtra)
+library(reshape2)
+library(kableExtra)
+library(ggradar)
+library(corrplot)
+
+
+```
+## 2. Data (see README.md for further refrences)
+
+1. Spotify API: 
+
+Spotify keeps a lot of data on its songs internally, we can access some of this data through the Spotify API.
+The Spotify API is a great public tool, allowing the use of Spotify’s wealth of data on music to build many kinds of systems.
+
+The Spotify API is quite powerful, and gives us access to a lot of information about both songs and artists. 
+This ranges from features describing the “feel” of the audio, such as the variables “liveness”, “acousticness”, and “energy”, 
+through features describing the popularity of the artist and song.
+
+We created a Spotify API user and pulled metrics about the 50 most played songs in 62 countries.
+In order for us to be able to work with the data, we cleaned it up and edited it to be adapted to our project.
+
+```{r}
+top50country <- read.csv("../data/top50bycountry.csv",  encoding = "UTF-8")[-1]
+
+summary(top50country)%>% kable() %>% kable_styling()
+```
+2. Explanation of table values and findings : 
+
+danceability-
+describes how suitable a track is for dancing based on a combination of musical elements including tempo, rhythm stability, beat strength, and overall regularity. A value of 0.0 is least danceable and 1.0 is most danceable.
+
+energy- 
+Energy is a measure from 0.0 to 1.0 and represents a perceptual measure of intensity and activity. Typically, energetic tracks feel fast, loud, and noisy. For example, death metal has high energy, while a Bach prelude scores low on the scale. Perceptual features contributing to this attribute include dynamic range, perceived loudness, timbre, onset rate, and general entropy.
+
+speechiness-  
+detects the presence of spoken words in a track. The more exclusively speech-like the recording (e.g. talk show, audio book, poetry), the closer to 1.0 the attribute value. Values above 0.66 describe tracks that are probably made entirely of spoken words. Values between 0.33 and 0.66 describe tracks that may contain both music and speech, either in sections or layered, including such cases as rap music. Values below 0.33 most likely represent music and other non-speech-like tracks.
+
+acousticness- 
+A confidence measure from 0.0 to 1.0 of whether the track is acoustic. 1.0 represents high confidence the track is acoustic.
+The mean is 0.25 , very low so we can understand the most of the songs are not acoustic.
+
+instrumentalness-
+Predicts whether a track contains no vocals. "Ooh" and "aah" sounds are treated as instrumental in this context. Rap or spoken word tracks are clearly "vocal". The closer the instrumentalness value is to 1.0, the greater likelihood the track contains no vocal content. Values above 0.5 are intended to represent instrumental tracks, but confidence is higher as the value approaches 1.0.
+The mean is very low , so we can infer that the tracks contains vocal.
+
+liveness- 
+Detects the presence of an audience in the recording. Higher liveness values represent an increased probability that the track was performed live. A value above 0.8 provides strong likelihood that the track is live.
+The mean is 0.1732 , so most of the songs dont have presence of an audience in the recording.
+
+valence- 
+A measure from 0.0 to 1.0 describing the musical positivity conveyed by a track.
+Tracks with high valence sound more positive (e.g. happy, cheerful, euphoric), 
+while tracks with low valence sound more negative (e.g. sad, depressed, angry).
+
+3. show a playlist
+```{r}
+israeltop50 <- top50country %>%
+  filter(country == "Israel") 
+
+head(israeltop50)
+```
+
+4. profile a few songs for contrast.
+
+```{r, echo=FALSE}
+
+israeltop50 %>%
+     filter(name %in% c("מי זאת","סתלבט בקיבוץ" )) %>%
+    select(-c(1, 3, 4)) %>%
+     ggradar() 
+```
+
+We picked two songs from Israel top 50 and compared the attributes of them.
+Both songs received scores above 50% in "danceability" and "valence" , and less than 50% in "instrumentalness".
+
+1. The Happiness Index:
+
+The World Happiness Report is a landmark survey of the state of global happiness .
+The reports review the state of happiness in the world today and show how the new science of happiness explains personal and national variations in happiness.
+
+The happiness scores and rankings use data from the Gallup World Poll . 
+The columns following the happiness score estimate the extent to which each of six factors – economic production, social support, life expectancy, freedom, absence of corruption, and generosity – contribute to making life evaluations higher in each country.
+This factors explain why some countries rank higher than others.
+
+```{r}
+happiness <- read_csv("../data/world-happiness-report-2021.csv")[c(1:12)]
+colnames(happiness)[1] <- "country"
+colnames(happiness)[2] <- "region"
+
+summary(happiness) %>% kable() %>% kable_styling()
+```
+
+2. #TODO: ADD METRIC EXPLAINATION    
+
+
+3. show some metrics
+
+```{r}
+happiness %>% 
+  head(12) %>% 
+  ggplot(aes(x =`Ladder score`, y = reorder(country,`Ladder score`),  fill = region)) + 
+  geom_bar(stat = "identity") +  
+  #scale_fill_brewer(palette = "Set3") +   
+  geom_text(aes(label =`Ladder score`), position=position_stack(vjust=0.9), color="black",size=3)
+```
+
+Top 12 countries. Finland is considered the happiest country in the world , Israel is in the 12th place .
+It can be seen that most of the countries received in the ranking are European countries. 
+Does the geographical location have anything to do with the level of happiness? 
+We would like to find out later and see if this has an impact on the music played in these countries.
+
+```{r}
+happiness %>% 
+  tail(10) %>% 
+  ggplot(aes(x =`Ladder score`, y = reorder(country,`Ladder score`),  fill = region)) + 
+  geom_bar(stat = "identity") + 
+  #labs(title = "Top Ten Un-Happiest Countries") + ylab("Countries") + xlab("Happiness Score") + 
+  #scale_fill_brewer(palette = "Set3") + 
+  geom_text(aes(label =`Ladder score`), position=position_stack(vjust=0.9),color="black",size=3)
+```
+
+Afghanistan is considered the unhappiest country in the world.
+Most of the countries accepted are countries from sub-Saharan Africa, is there a connection to this? 
+Similar to the happiest countries and their geographical location, we would like to check this out here as well.
+
+```{r}
+unhappy20 <- c(tail(happiness, 20)$country)
+
+top50country %>%
+  group_by(country) %>%
+  select(country) %>%
+  distinct() %>%
+  filter(country %in% unhappy20) -> unhappymusic
+
+unhappymusic
+```
+Don't have spotify data on 20 unhappiest countries!!! India is the only country among them that use Spotify.
+```{r}
+ happiness_c <- happiness %>%
+     filter(country == "India") 
+happiness_c
+```
+India’s ladder score is relatively low and despite this there is a use of Spotify in the country. What does that mean? What is different in India in terms of indices from the other countries ranked like it on the ladder score, which is why it is developed enough to use Spotify? An interesting point for research for us.
+
+
+3. profile countries
+
+```{r}
+happiness %>%
+    select(c(1,3,7,8,9,10, 11, 12)) %>%
+    mutate_each(funs(rescale), -country) %>%
+    filter(country %in% c("Israel", "Finland", "India", "Argentina")) %>%
+    ggradar() 
+
+```
+
+#TODO: Eden and Nitzan
+
+## 3. Preliminary Results:
+1. build mean by country, explain 
+```{r}
+# mean by country
+top10mean <-  top50country[-c(2, 3, 4)] %>%
+  group_by(country) %>% 
+  slice(n = 50) %>%
+  summarise(across(everything(), list(mean))) %>% 
+  remove_rownames %>% 
+  column_to_rownames(var="country")
+
+summary(top10mean)%>% kable() %>% kable_styling()
+```
+
+2. profile countries
+
+```{r}
+top10mean %>%
+     add_rownames( var = "country" ) %>%
+     filter(country %in% c("Israel", "Finland", "India", "Argentina")) -> country_radar
+
+ggradar(country_radar) 
+```
+
+#TODO: Eden and Nitzan
+
+3. calculate distances between countries 
+
+In order to see how similar different countries are we will calculate the euclidean distance between the countries. we can then see how similar the music of each country is to the other.
+```{r}
+# calculate distances between each two countrys
+distances <- as.data.frame(as.matrix(dist(top10mean, method='euclidean')))
+```
+4. show distances from Israel
+
+```{r}
+distance_israel <- distances %>% 
+        rownames_to_column(var="country") %>%
+        pivot_longer(!country, names_to = 'dist', values_to = 'from') %>%
+        filter(country == 'Israel') 
+
+ggplot(distance_israel, aes(x=dist, y=from)) + 
+  geom_bar(stat = "identity",width = 0.8 , fill = "#66ccff") +
+  labs(title = "Distance between Israel to all other counties" ) +  theme_classic() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1  ))
+```
+
+#TODO: Eden and Nitzan
+6. check corr between columns
+
+```{r}
+corrplot(cor(top10mean), type = "upper", method = "ellipse", tl.cex = 0.9)
+```
+#TODO: Eden and Nitzan
+7. plot scree plot
+
+```{r}
+#plot distances
+country_scaled <- scale(top10mean)
+
+res.pca <- PCA(country_scaled,  graph = FALSE)
+# Visualize eigenvalues/variances
+fviz_screeplot(res.pca, addlabels = TRUE, ylim = c(0, 50))
+```
+The scree plot shows the different dimensions as principal components. we can see that no singular dimension is especially dominant, this will make it harder for us to see the clusters in 2D.
+
+8. plot kmeans
+
+```{r}
+kmean_calc <- function(df, ...){
+  kmeans(df, scaled = ..., nstart = 30)
+}
+
+km4 <- kmeans(country_scaled, 4)
+
+p1 <- fviz_cluster(km4, data = country_scaled, ellipse.type = "convex") + theme_minimal() + ggtitle("k = 2") 
+
+plot_grid(p1)
+```
+
+We would expect our clusters to be dominated by region, but there arent any clear insights from the chosen clusters.
+
+9. choose k using elbow method
+
+```{r}
+set.seed(31)
+# function to compute total within-cluster sum of squares
+fviz_nbclust(country_scaled, kmeans, method = "wss", k.max = 24) + theme_minimal() + ggtitle("the Elbow Method")
+```
+
+no clear clusters, error is very high. this means that using kmeans(4) did not do a good job. 
+
+1. scale happiness
+```{r}
+list_country <- c(row.names(top10mean))
+happiness %>%
+  select(c(1,3,7,8,9,10, 11, 12)) %>%
+  filter(country %in% list_country) %>%
+  column_to_rownames(var="country") %>%
+  mutate_each(funs(rescale)) -> happ_scaled
+
+```
+3. calculate distances between countries
+```{r}
+# calculate distances between each two country s
+distances <- as.data.frame(as.matrix(dist(happ_scaled, method='euclidean')))
+```
+4. show distances from Israel
+5. map distances (!)
+6. check corr between columns
+
+```{r}
+corrplot(cor(happ_scaled), type = "upper", method = "ellipse", tl.cex = 0.9)
+```
+
+#TODO: Eden and Nitzan
+
+7. plot scree plot
+
+```{r}
+res.pca <- PCA(happ_scaled,  graph = FALSE)
+# Visualize eig envalues/variances
+fviz_screeplot(res.pca, addlabels = TRUE, ylim = c(0, 50))
+
+```
+8. plot kmeans
+
+```{r}
+kmean_calc <- function(df, ...){
+  kmeans(df, scaled = ..., nstart = 30)
+}
+
+km2 <- kmean_calc(happ_scaled, 2)
+km3 <- kmean_calc(happ_scaled, 3)
+km4 <- kmeans(happ_scaled, 4)
+km5 <- kmeans(happ_scaled, 5)
+km6 <- kmeans(happ_scaled, 6)
+km7 <- kmeans(happ_scaled, 7)
+km8 <- kmeans(happ_scaled, 8)
+km9 <- kmeans(happ_scaled, 9)
+km10 <- kmeans(happ_scaled, 10)
+km11 <- kmeans(happ_scaled, 11)
+p1 <- fviz_cluster(km4, data = happ_scaled, ellipse.type = "convex") + theme_minimal() + ggtitle("k = 2") 
+# p2 <- fviz_cluster(km3, data = country_scaled, ellipse.type = "convex") + theme_minimal() + ggtitle("k = 3")
+# p3 <- fviz_cluster(km4, data = country_scaled, ellipse.type = "convex") + theme_minimal() + ggtitle("k = 4")
+# p4 <- fviz_cluster(km5, data = country_scaled, ellipse.type = "convex") + theme_minimal() + ggtitle("k = 5")
+# p5 <- fviz_cluster(km6, data = country_scaled, ellipse.type = "convex") + theme_minimal() + ggtitle("k = 6")
+# p6 <- fviz_cluster(km7, data = country_scaled, ellipse.type = "convex") + theme_minimal() + ggtitle("k = 7")
+plot_grid(p1)#, p2, p3, p4, p5, p6, labels = c("k2", "k3", "k4", "k5", "k6", "k7"))
+```
+
+The clusters here seem way more significant than the music clusters. the top country are all clustered very closely together.
+
+9. choose k using elbow method
+
+```{r}
+set.seed(31)
+# function to compute total within-cluster sum of squares
+fviz_nbclust(happ_scaled, kmeans, method = "wss", k.max = 24) + theme_minimal() + ggtitle("the Elbow Method")
+```
+
+Clusters our much more accurate and meaningful. 
+
+1. measure jaccard distance between clusters
+
+The Jaccard Similarity Index is a measure of the similarity between two sets of data.
+Developed by Paul Jaccard, the index ranges from 0 to 1. The closer to 1, the more similar the two sets of data.
+The Jaccard similarity index is calculated as:
+Jaccard Similarity = (number of observations in both sets) / (number in either set)
+Or, written in notation form:
+
+J(A, B) = |A∩B| / |A∪B|
+
+If two datasets share the exact same members, their Jaccard Similarity Index will be 1. Conversely, if they have no members in common then their similarity will be 0.
+
+```{r}
+km4_music <- kmeans(country_scaled, 4)$cluster
+km4_happ <- kmeans(happ_scaled, 4)$cluster
+# jaccard_indep(km4_happ, km4_music)
+source("http://faculty.ucr.edu/~tgirke/Documents/R_BioCond/My_R_Scripts/clusterIndex.R") 
+ci <- cindex(clV1=km4_music, clV2=km4_happ, self=FALSE, minSZ=1, method="jaccard")
+ci[2:3] # Returns Jaccard index and variables used to compute it 
+
+```
+very low similarity. this was a very rough way to find similarities. in our project we will explore more precise and sceintif methods.
+
+3. insights
+happ -> music IRL so should also be happ -> music. restructure to flow this and build fitting metrics
+
+## 4. plan:
+done:
+1. get data 
+2. explain data 
+3. cluster music 
+4. cluster happiness
+5. compare.
+
+TODO:
+1. rebuild metrics based on insights
+2. explain and test quality of metrics
+2. remodel clusters
+3. build prediction engine
+4. insight
+
+## Appendix
+https://www.nature.com/articles/s41599-021-00855-1
+https://medium.com/swlh/comparing-the-music-tastes-of-different-countries-45c4a1924447
+https://www.kaggle.com/code/sejalkshirsagar/world-happiness-report-2021
+https://developer.spotify.com/
+
+### Data README
+data in Data file.
+```{r include_data_readme, comment=''}
+
+```
+
+### Source code
+
+```{r, ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
+
+```

@@ -1,0 +1,447 @@
+---
+title: Modeling Musical Diversity
+subtitle: How newly available sound data can help us better measure musical diversity
+author: "Group E - Yonatan Amaru, Eden Bar Kochva, Nitzan Bakalchuk"
+date: "6/14/2022"
+output:
+  html_document: default
+  pdf_document: default
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message=FALSE, warning = FALSE)
+```
+
+```{r, load-packages, message = FALSE, , warning=FALSE, echo=FALSE}
+#TODO: CLEAN ME! - Yonatan
+library(webshot)
+library(tinytex)
+library(knitr) # knit to PDF
+library(spotifyr)# for pulling track audio features and info from Spotify’s Web API.
+library(dplyr)
+
+# graphical and visualization libraries:
+library(tidyverse)
+library(wordcloud2) # fast visualization tool for creating word cloud
+library(ggplot2)# creating graphics
+library(ggridges) # for visualizing changes
+library(tidytext)
+
+suppressPackageStartupMessages(library(dplyr))
+library(scales)
+library(yarrr) # visualizing features
+library(gridExtra)
+library(reshape2)
+library(kableExtra)
+library(ggradar)
+library(corrplot)
+library(plotly)
+```
+## Abstract
+Music is one of the most universal way of expression in human life. Music is present in the everyday lives of people of all ages and all cultures around the world. Music is fun, but its influence goes beyond simple enjoyment. Research in music has shown that several dimensions of human life can be positively affected by music[1]. 
+There our many different kinds of music and We all have our music preference. These preference reflect our personality, culture, social circles and exposure. Much research has gone into the affect different genres have on behavior and performance. Research has also portrayed the positive effect of musical diversity and its importance to society[2].
+
+In order to further explore this phenomenon, in this study we attempt to measure musical diversity using newly available data.
+
+## Introduction
+Digitization has had a huge affect on music production and consumption. On the consumption side, with streaming platforms, like Spotify and Apple Music, listening to new music is more accessible then ever, with no extra monetary cost and immediate availability of a immense musical library.  Production has also been effected. digital audio can be reproduced with almost zero cost. Today, our musical tastes our much more defined but preference and exposure than buy limitation. There is evidence that increased availability has enhanced musical diversity[3].
+
+Another huge impact of digitization is the it has given us access to massive quantity of data about listening trends on a global scale new ways of quantifying music. Using this newly available data, Spotify has had huge success in building its recommendation algorithm. Originally, some researchers feared that the recommendations algorithms could lead to musical convergence. recent research has shown the opposite effect - an increase in between cultural music diversity.  
+
+The majority of comparative analyses of human cultural diversity, and musical diversity, focuses on between-culture variation with less consideration of within-culture variation. Within-culture variation can be a measure of cultural range, and it can reflect inner-culture segmentation. We will explore different scientific methods to measure the within-culture musical variation.
+
+Can music be measured? Music, as an art, is very difficult to quantify. Despite the challenges, in our digital age, quantifying music can help us build very powerful tools, like Spotify's recommendation engine, and better research both music and its effect on human life and culture. 
+
+Measuring musical diversity is a challenge in itself[4]. Different measurements can mean and reflect different things. does it portray within culture segregation? or does it reflect cultural range and flexibility? In our research, we will consider different methods of measuring diversity adopted from the fields of biodiversity, mathematics and cultural research.
+
+## Methods and Data
+```{r}
+top50country <- read.csv("../data/top50bycountry.csv",  encoding = "UTF-8")[-1]
+```
+#### Spotify API: 
+The Spotify API is a publicly available tool, which gives access to Spotify’s wealth of data on songs, artists and listening trends.
+In order to gain access to this data you have to register to Spotify's API service[5].
+The data we will use contains the top 50 songs for each of 62 countries. Each song is made out of:
+
+```{r}
+spotify.metrics = c("Country", "Song name","Artist", "Genre", "danceability", "energy", "speechiness", "acousticness", "instrumentalness", "liveness", "valence")
+spotify.data=c("Country Of Playlist",
+               "Name of song",
+               "Primary artist of song",
+               "Primary genre of artist",
+               "suitability for dancing based tempo, rhythm stability, beat strength, and more",
+               "perceptual measure of intensity and activity. Typically, energetic tracks feel fast, loud, and noisy",
+               "detects the presence of spoken words in a track",
+               "A confidence measure  of whether the track is acoustic",
+               "whether a track contains vocals. 'Ooh's and 'aah's. Rap or spoken word tracks are very vocal",
+               "Detects the presence of an audience in the recording",
+               "describes the musical positivity conveyed")
+spotify.table <- data.frame(spotify.metrics, spotify.data)
+colnames(spotify.table) <- c("Attribute", "Explanation")
+spotify.table %>%
+  kable(booktabs = TRUE) %>%
+  kable_styling(latex_options = "scale_down")
+```
+
+#### Country wise analysis
+This research is meant to give insight into musical diversity across different slices*.  Our work will focus on a country wise analysis of musical diversity. The main advantage of this choice is the wealth of information and the expectation of a range of diversity, as different countries have different musical trends. In addition, a country-wise analysis can give us insight into both musical range and musical segregation.
+
+#### **1. Genre Diversity - A direct approach**
+
+We can attempt to model the diversity of a playlist based on the distribution of genres and artists. A wider range of genres at a higher distribution can mean a more varied playlist. 
+
+Spotify does not (publicly) classify the genre of different songs, but it does classify the genres of the artists, so we classified the song genre based on the artist genre. 
+
+```{r}
+#Israel music distribution by genre: 
+top50country %>%
+  mutate(genre = replace(genre, genre ==  '', 'Unknown')) %>%
+  filter(country == 'Israel') %>%
+  group_by(genre) %>%
+  summarise(n=n(), .groups='drop') %>%
+  count(genre = fct_collapse(genre, Other = unique(genre[n < 2])),  wt = n) %>%
+  ggplot(aes(genre, n, fill = genre)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label=n), vjust=0) +
+  labs(title = "Top 50 - Israel",
+       y = "Number of songs") +
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.text = element_text(size = 10),
+        axis.title = element_text(size = 10), 
+        legend.title = element_text(size = 10),
+        aspect.ratio = 2) -> plot1
+
+#USA music distribution by genre: 
+top50country %>%
+  filter(country == 'United States') %>%
+  mutate(genre = replace(genre, genre ==  '', 'Unknown')) %>%
+  group_by(genre) %>%
+  summarise(n=n(), .groups='drop') %>%
+  count(genre = fct_collapse(genre, Other = unique(genre[n < 2])),  wt = n) %>%
+  ggplot(aes(genre, n, fill = genre)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label=n), vjust=0) +
+  labs(title = "Top 50 - United States",
+       y = "Number of songs") +
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.text = element_text(size = 10),
+        axis.title = element_text(size = 10), 
+        legend.title = element_text(size = 10),
+        aspect.ratio = 2) -> plot2
+
+grid.arrange(plot1, plot2, ncol=2)
+
+#par(fig=c(0.1,0.67,0.1,0.25), new=TRUE)
+
+```
+
+We will Examine two ways to measure diversity by genre:
+
+1. **Unique Genres:** The number of distinct genres. The **Higher** the score the more diverse.
+
+2. **Genre Distribution MSE:** How level is the distribution between the different Genres. A level distribution would mean all genres are represented by the same amount of songs. The **Lower** the score, the smaller the long tail. 
+
+```{r}
+MSE <- function(x) {
+  sum(sqrt((x-mean(x))^2),na.rm=TRUE)/length(x)
+}
+top50country %>%
+  filter(country %in% c("Israel", "United States")) %>%
+  mutate(genre = replace(genre, genre ==  '', 'Unknown')) %>%
+  group_by(country, genre) %>% 
+  summarise(n=n(), .groups='drop') %>%
+  group_by(country) %>%
+  summarise(`Unique Genres` = n(), `Genre Distribution MSE` = MSE(n)) %>% 
+  kable() %>% 
+  kable_styling()
+
+```
+
+The primary issue with this method is that genre classification is fairly ambiguous and fails to truly reflect the musical diversity. Spotify's classification is given from a (pretty) singular cultural perspective - "American pop" is just "pop" while Israeli pop is "Israeli pop". similarly Latin music gets a very general label as "Latin" that fails to encompass its inner complexities. 
+
+Although the Spotify algorithm may use genre to base its recommendations, we notices that in Israeli recommendations it links Israeli English pop music with Israeli Hebrew pop music rather than Non-Israel English pop music.
+
+We will attempt to model more intricate ways of measuring diversity using our data based on scientific methods from Biology*, Mathematics and Social Science.
+
+#### **2. Vector Concentration - A Mathematical and Statistical approach**
+Each song in our database contains a set of numerical metrics on a scale from 0 to 1. In this approach, each song is a Vector on the 7th plane. In order to calculate the variance of our playlist we will treat our playlist as a cluster. According to the Hastie equation 14[6], the within-cluster variance $W(C_k)$ of a $Cluster_k$ is defined (for th Euclidean distance) as $\sum_{x_i \in C_k}||x_i - \overline x_k||^2$, where $\overline x_k$ is the mean of the cluster $C_k$. The mean of the cluster is commonly called the cluster centroid, its value is the coordinate wise average of all the points in the cluster. ${x_1, x_2, ...x_n}$ is the vector of each point, or in our case song. This method for calculating variance is used when measuring the accuracy of K clusters using the "Elbow method". Plainly, we measure the RMSE at a higher degree. 
+
+Standard Deviation: $\overline V = \frac {\sqrt {\sum_{x_i \in C_k}||x_i - \overline x_k||^2}}{n}$.
+```{r}
+#practice data
+israelstats <- top50country %>%
+  filter(country == "Israel") %>%
+  select(-c(1,2, 3, 4)) 
+
+# function 
+rmse.music <- function(song_data) {
+  # euclidean distance without square
+  euclidean <- function(a,b) sum((a - b)^2)
+  # calculate mean vector
+  means <- colMeans(song_data)
+  return(sqrt(sum(mapply(euclidean, song_data, means)))/ nrow(song_data))
+}
+```
+
+```{r}
+# clean music
+top50country %>%
+       mutate(genre = replace(genre, str_detect(genre, 'pop'), 'pop'),
+              genre = replace(genre, str_detect(genre, 'latin'), 'latin'),
+              genre = replace(genre, str_detect(genre, 'rock'), 'rock'),
+              genre = replace(genre, str_detect(genre, 'blues'), 'blues'),
+              genre = replace(genre, str_detect(genre, 'rap'), 'rap'),
+              genre = replace(genre, str_detect(genre, 'edm'), 'edm'),
+              genre = replace(genre, str_detect(genre, 'r&b'), 'r&b'),
+              genre = replace(genre, str_detect(genre, 'country'), 'country'),
+              genre = replace(genre, str_detect(genre, 'house'), 'house'),
+              genre = replace(genre, str_detect(genre, 'indie'), 'indie'),
+              genre = replace(genre, str_detect(genre, 'soul'), 'soul'),
+              genre = replace(genre, str_detect(genre, 'reggae'), 'reggaeton'),
+              genre = replace(genre, str_detect(genre, 'dance'), 'dance'),
+              genre = replace(genre, str_detect(genre, 'hip hop'), 'hip hop'),
+              genre = replace(genre, genre ==  '', 'Unknown')) -> top_genres
+```
+
+```{r}
+# 3D representation of distances from center
+top_genres %>%
+  filter(country == "Israel") %>%
+  head(30) %>%
+  select(c(2,3,4,5,6, 11)) %>%
+  rbind(c("Centeroid","Centroid", "Centroid", mean(.$danceability), mean(.$energy), mean(.$valence))) %>%
+  plot_ly(x = ~danceability, y = ~energy, z = ~valence, color = ~genre,
+          text = ~paste('Name:', name, '<br>Artist:', artists, '<br>Genre:', genre)) %>%
+  add_markers() %>%
+  layout(scene = list(xaxis = list(title = 'Danceability'),
+                     yaxis = list(title = 'Energy'),
+                     zaxis = list(title = 'Valence')),
+         title = 'Israel Top 30 songs 3D plot of Danceability, Energy and Valence')
+  
+```
+
+#### **3. Rao Stirling - A Social and Economical approach**
+Cultural Diversity has become an important social issue around the world. In order to better measure cultural diversity, the Rao Stirling model was introduces for economic analyses of cultural diversity[7]. 
+The Rao–Stirling index consists of three components: variety, balance and disparity. The greater the variety, balance and disparity, the greater the diversity. 
+To assess the diversity of any system, in our case a playlist of songs, the system must first be divided into different types or categories: Song title, Origin, Genre.
+The variety, balance, and disparity are then calculated using these categories.
+```{r}
+categories <- c("Variety", "Balance", "Disparity")
+categories.explained <- c("Number of different types", "Proportion for every type", "Dissimilarity between existing types")
+categories.music <- c("Number of genres and the song concentration density", "Concentration cluster ballance", "Maximal Euclidean distance between songs")
+spotify.table <- data.frame(categories, categories.explained, categories.music)
+colnames(spotify.table) <- c("Component", "Explaination", "Musical Calculation")
+spotify.table %>%
+  kable(booktabs = TRUE) %>%
+  kable_styling(latex_options = "scale_down")
+```
+
+Proportion of elements in category:  i -$p_i$
+
+Distance between categories i and j: $d_ij$
+
+Rao stirling Formula: $\Delta Stirling = \sum_{i}\sum_{j} {p_i*p_j*d_ij}$
+
+
+#### **Testing the models**
+The three models we chose each represent a different way to measure diversity. We will attempt to show how different methods reflect different aspects of diversity, like segregation and range. 
+
+## **Results**
+We ran each algorithm on each Top 50 - by country playlist and mapped the results (see appendix).
+```{r}
+# genre MSE
+
+MSE <- function(x) {
+  sum(sqrt((x-mean(x))^2),na.rm=TRUE)/length(x)
+}
+top50country %>%
+  mutate(genre = replace(genre, genre ==  '', 'Unknown')) %>%
+  group_by(country, genre) %>% 
+  summarise(n=n(), .groups='drop') %>%
+  group_by(country) %>%
+  summarise(`Genre MSE` = MSE(n)) -> genre.MSE
+
+```
+
+```{r}
+# RMSE
+rmse.music <- function(song_data) {
+  # euclidean distance without square
+  euclidean <- function(a,b) sum((a - b)^2)
+  song_data <- song_data[-1]
+  # calculate mean vector
+  means <- colMeans(song_data)
+  return(sqrt(sum(mapply(euclidean, song_data, means)))/ nrow(song_data))[0]
+}
+
+countrysplit <- top50country %>%
+  select(-c(2,3,4)) %>%
+  group_by(country) %>%
+  group_split() 
+
+
+country.rmse <- lapply(countrysplit, rmse.music)
+rmse.score = unlist(country.rmse, use.names=FALSE)
+
+# Rao stirling
+rao_stirling <- function(Country) {
+  new <- top50country %>% 
+    filter(country == Country)  %>% 
+    select("genre","country", 'danceability','energy',"speechiness","acousticness","instrumentalness","liveness","valence" ) 
+  
+  mean_by_genre <-new %>% group_by(genre) %>%
+    summarise_at(vars( danceability,energy,speechiness,acousticness,instrumentalness,liveness,valence), list(mean = mean))  
+  count_genre <-new %>%  group_by(genre) %>% count(genre, sort = TRUE) 
+  
+  mean_by_genre_vector <- mean_by_genre %>% select(danceability_mean,energy_mean,speechiness_mean, acousticness_mean, instrumentalness_mean, liveness_mean, valence_mean )
+  
+  
+  euclidean <- function(a, b) sqrt(sum((a - b)^2))
+   # Euclidean distance
+  distance <- function(i,j, data) {
+    vector_i = as.numeric(data[i,])
+    vector_j = as.numeric(data[j,])
+    return(euclidean(vector_i, vector_j))
+  }
+  
+  # calculate the proportion for each gender
+  proportion.vector <- function( data) {
+    # vector to calculate the prop
+    avector <- as.vector(count_genre['n'])  
+    # change the column to prop
+    count_genre$n <- count_genre$n*(1/(sum(count_genre['n'])))
+    return(as.vector(count_genre['n']))
+  }
+  
+  
+  P = proportion.vector(count_genre)
+  names(P)[1] <- "prop"   # rename the column
+  `%+=%` = function(e1,e2) eval.parent(substitute(e1 <- e1 + e2)) 
+  dis = 0
+  for (i in 1:nrow(mean_by_genre_vector)){ 
+      for (j in 1:nrow(mean_by_genre_vector)){ 
+        dis %+=% (distance(i,j, mean_by_genre_vector)*P$prop[[i]]*P$prop[[j]])}}
+  return (dis)}
+
+country.name <- top50country %>%
+  select(1) %>%
+  distinct()
+
+country.stirling <- apply(country.name, 1, rao_stirling)
+stirling.score = unlist(country.stirling, use.names=FALSE)
+
+genre.mse.score <- genre.MSE$`Genre MSE`
+# transform data
+countrys <- top50country %>%
+  select(1) %>%
+  distinct()
+
+results <- data.frame(countrys, genre.mse.score, rmse.score, stirling.score)
+results <- results %>%
+  column_to_rownames(var = "country")
+
+```
+```{r}
+# Results Table
+results %>%
+  #Pivoting data
+  pivot_longer(cols = everything()) %>%
+  #Grouping by sun/sky
+  group_by(name) %>% 
+  #Calculating mean and sd grouped by sun/sky
+  summarise(
+    mean = mean(value,na.rm = T),
+    sd = sd(value,na.rm = T)
+  ) %>%
+  kable(booktabs = TRUE) %>%
+  kable_styling(latex_options = "scale_down")
+```
+These are our results based off a sample of 62 countries and there respective playlists for the week of 11/6/2022. The Standard Deviation of Genre.MSE and the stirling Model are higher in respect of there mean value from the RMSE score. This is inline with our expectation, as RMSE, being based purely on the numerical metrics is significantly more stable than the methods that rely on humanly assigned classes (Genres). 
+
+#### **Result Distribution**
+```{r}
+# Results Density
+data_long <- results %>%   
+  # Apply pivot_longer function
+  pivot_longer(colnames(results)) %>% 
+  as.data.frame()
+ggp2 <- ggplot(data_long, aes(x = value)) +    # Draw each column as density
+  geom_density() + 
+  facet_wrap(~ name, scales = "free") +
+  theme(aspect.ratio = 1)
+ggp2 
+```
+**Note:** Axis ratio fitted for display, does not reflect real ratio
+
+Figure 1, reflecting genre.MSE and figure 2, reflecting RMSE distribution fit the Chi-Square distribution. This follows Cochran's theorem[8] about the probability distribution of statistics that are used in the analysis of variance[9]. Figure 3, reflecting the Stirling model does not seem to fit the Chi-Square distribution, and has a Normal distribution. This is inline with the methods we used. the first two methods, being purely statistical, represent diversity as variance. The Stirling model treats diversity as a balance of traits of a population.
+
+#### **Notable playlists**
+1. Top 50-Latvia was ranked as the most diverse playlist by both Genre MSE and The stirling model and ranked 10th by RMSE. Top 50-Latvia is made out of a mix of mainstream pop shared by the majority of the playlists and a range of top hits from a lot of different countries, mostly in English. This explains the high Genre MSE, as each country's pop is classified differently. we can classify this playlist as having a diverse origin. 
+2. Top-50 Iceland heads the RMSE charts with a very high RMSE rank. Despite this, it ranks very low on both genre.MSE and the Stirling method. Top-50 Iceland is composed primarily of local music, mainly folk and singer-songwriter songs, with some international hip-hop and pop hits. This is inline with our expectations: the locality of the music meant that a lot of songs were classified as a single genre while the polarized styles has given it a high RMSE score.
+3. Top 50-Lithuania ranked 4 and second in RMSE and Stirling respectively. 
+
+#### **Model correlation**
+```{r}
+corrplot(cor(results),
+   method = "color", 
+   addCoef.col="grey", 
+   order = "AOE", 
+   number.cex=1)
+```
+
+1. The negative correlation between The Stirling Model and Genre.MSE is high (Genre.MSE has a higher diversity the lower the score)
+2. RMSE is correlated with both The Stirling model and genre.MSE. Surprisingly the correlation with Genre.MSE is higher despite no overlap of the data they are based on. This may be a factor of both metrics sharing a similar distribution. The results are not significant enough, considering the sample size and variations, for us to make assumptions on this point.
+
+## Discussion
+1.**Genre MSE:** This metric can be a good measure of diversity in a very simplistic way but lacks definition and is highly biased.
+2. **RMSE:** This metric is the most stable and adverse to human bias as it is based completely on computer calculated numerical values, although how these values are calculated exactly we don't know. it does not factor music origin in any way so obviously does not encompass diversity completely.
+3. **Rao stirling:** By combine a few different values for diversity, we get a more complex and rich picture. The stability of the method is in question but this can be fixed by adjusting the weights of the different metrics tweaking the Alpha and Beta values.
+
+All three metrics can be used for future work. RMSE will probably give the best results when combined with Machine Learning models because of its low deviation and lack of bias. Rao Stirling Gives us the widest perspective by combining both numerical metrics and human classification which is probably a fitting model for music as a art.
+
+Future research should attempt to measure differently sliced playlist and see if they reach similar conclusions.
+Another interesting venue of research could be fitting Meta-Heuristic models, in example, Alpha Diversity[10] from the study of Biodiversity and comparing its results.
+
+Research has shown that the habit of listening to a wide range of musical genres can increase coping and performance of students[11]. A analysis between student performance and the different ways of measuring diversity can help us better reflect upon our methods of measuring diversity and, to some extent, classify which of these methods reflect musical range and which methods reflect musical segregation. 
+
+As previously stated studies have shown a diverse playlist may have a positive effect on mood and performance. How diverse is your Music?
+
+## Notes
+1. Artist diversity is another method we researched which produced interesting results when correlated with country GDP but was left out of the final draft.
+2. For simplicity we did not consider the popularity of each song within the 50 most popular songs, but popularity is not necessarily distributed evenly.
+3. At some point we joined the genres into more general terms but it skewed the results so the final version is without genre mutation.
+4. Language diversity was not taken into account, further studies may take it into account.
+5. The slices contemplated for this research were our personal daily mixes, playlists by artists, and Top 50 by country.
+6. Kendrick Lamar is the undisputed king. check the RMSE score of some of his albums!
+
+## References
+1. [The impact of music on well-being](https://www.frontiersin.org/articles/10.3389/fpsyg.2020.01246/full)
+2. [The impact of social diversity in music on society](https://studymoose.com/cultural-diversity-in-music-and-its-positive-and-negative-effects-on-society-essay)
+3. [Cultural Divergence in popular music: the increasing diversity of music consumption on Spotify across countries](https://www.nature.com/articles/s41599-021-00855-1)
+4. [Measuring Playlist Diversity for Recommendation Systems](https://www.slaney.org/malcolm/yahoo/Slaney2006-MeasuringPlaylistDiverisityACMMM.pdf)
+5. [Spotify Api for developers](https://developer.spotify.com/)
+6. [The Hastie Equation - cluster validation](https://web.itu.edu.tr/sgunduz/courses/verimaden/paper/validity_survey.pdf)
+7. [Measuring Rao – Stirling Cultural Diversity](https://ec.europa.eu/eurostat/cros/system/files/NTTS2013fullPaper_186.pdf)
+8. [Cochran distribution](https://en.wikipedia.org/wiki/Cochran%27s_theorem)
+9. [ANOVA](https://www.analyticsvidhya.com/blog/2018/01/anova-analysis-of-variance/)
+10. [Measuring variance from nature on music](https://www.mdpi.com/2078-1547/11/1/7/pdf)
+11. [Music and Coping](https://core.ac.uk/download/pdf/215262552.pdf)
+12. [Bimusicality and bilingualism: Insights into the nature of complex cognitive faculties](https://www.sibetrans.com/trans/public/docs/trans_16_10.pdf)
+
+## Source code
+```{r, ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,277 @@
+---
+title: "Music Analysis"
+author: "Yonatan Amaru"
+date: "6/11/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+## Creating metrics
+in order to create more fitting metrics we will analyze the music data by country happiness
+1. reshaping the data:
+```{r}
+merged_df <- merge(top10mean, happ_scaled, by = 0)
+colnames(merged_df)[1] <- "country"
+merged_df <- arrange(merged_df, desc(`Ladder score`))
+```
+
+```{r}
+merged_df.long <- melt(merged_df, id = "Ladder score", measure = c("energy_1", "valence_1", "danceability_1", "acousticness_1"))
+ggplot(merged_df.long, aes(`Ladder score`, value, colour = variable)) + geom_point() + geom_smooth(method='lm', formula= y~x)
+```
+
+nada :(
+
+```{r}
+simple.reg <- lm(`Ladder score`~valence_1, data=merged_df)
+summary(simple.reg)
+```
+the Multiple R-squared is very low, not a very good indicator
+
+```{r}
+plot(merged_df[c(3, 8,2,13, 10,12)])
+```
+```{r}
+double.reg <- lm(`Healthy life expectancy`~valence_1+danceability_1+energy_1, data=merged_df)
+summary(double.reg)
+```
+
+```{r}
+corrplot(cor(merged_df[-1]), type = "lower", method = "ellipse", tl.cex = 0.9)
+```
+no strong correlation
+
+let present some of the data mapped in order
+artist diversity, dance variance
+
+```{r}
+div_top50 <- top50country %>%
+  group_by(country) %>% 
+  summarise(unique = n_distinct(artists), n = n(), .groups = 'drop', sd_dance=sd(danceability)) %>% 
+  mutate(artist_diversity = unique/n)
+
+div_top50["sd_dance"] <- (div_top50["sd_dance"]-min(div_top50["sd_dance"]))/(max(div_top50["sd_dance"])-min(div_top50["sd_dance"])) 
+div_top50
+```
+range of valence
+```{r}
+
+merged_df.long <- melt(merged_df, id = "energy_1", measure = c("Ladder score", "Healthy life expectancy", "Freedom to make life choices"))
+ggplot(merged_df.long, aes(energy_1, value, colour = variable)) + geom_point() + geom_smooth(method='lm', formula= y~x)
+
+```
+```{r}
+merged_df_v2 <- merge(merged_df, div_top50[-c(2, 3)], by = 1)
+```
+```{r}
+corrplot(cor(merged_df_v2[-1]), type = "lower", method = "ellipse", tl.cex = 0.9)
+```
+```{r}
+merged_df.long <- melt(merged_df_v2, id = "Logged GDP per capita", measure = c("sd_dance", "artist_diversity"))
+ggplot(merged_df.long, aes(`Logged GDP per capita`, value, colour = variable)) + geom_point() + geom_smooth(method='lm', formula= y~x)
+```
+
+```{r}
+double.reg <- lm(`Logged GDP per capita`~artist_diversity+sd_dance, data=merged_df_v2)
+summary(double.reg)
+```
+
+```{r}
+colnames(merged_df_v2)
+```
+```{r}
+# CLEANING MAIN GENRES
+top50country %>% 
+    select('country', 'genre') %>%
+       mutate(genre = replace(genre, str_detect(genre, 'pop'), 'pop'),
+              genre = replace(genre, str_detect(genre, 'latin'), 'latin'),
+              genre = replace(genre, str_detect(genre, 'rock'), 'rock'),
+              genre = replace(genre, str_detect(genre, 'blues'), 'blues'),
+              genre = replace(genre, str_detect(genre, 'rap'), 'rap'),
+              genre = replace(genre, str_detect(genre, 'edm'), 'edm'),
+              genre = replace(genre, str_detect(genre, 'r&b'), 'r&b'),
+              genre = replace(genre, str_detect(genre, 'country'), 'country'),
+              genre = replace(genre, str_detect(genre, 'house'), 'house'),
+              genre = replace(genre, str_detect(genre, 'indie'), 'indie'),
+              genre = replace(genre, str_detect(genre, 'soul'), 'soul'),
+              genre = replace(genre, str_detect(genre, 'reggae'), 'reggaeton'),
+              genre = replace(genre, str_detect(genre, 'dance'), 'dance'),
+              genre = replace(genre, str_detect(genre, 'hip hop'), 'hip hop')) -> top_genres
+  
+```
+
+```{r}
+genre_count <- top_genres %>%
+  group_by(country, genre) %>%
+  summarise(n = n()) %>%
+  arrange(country, desc(n)) 
+  
+
+pop <- genre_count %>% 
+  filter(genre == "pop") %>%
+  mutate(pop = n/50)
+
+hiphop <- genre_count %>% 
+  filter(genre == "hip hop") %>%
+  mutate(hip_hop = n/50)
+
+```
+```{r}
+merged_df_v3 <- merge(merged_df_v2, pop[-c(2, 3)], by = 1)
+merged_df_v3 <- merge(merged_df_v3, hiphop[-c(2, 3)], by = 1)
+```
+
+```{r}
+merged_df.long <- melt(merged_df_v3, id = "Logged GDP per capita", measure = c("pop"))
+ggplot(merged_df.long, aes(`Logged GDP per capita`, value, colour = variable)) + geom_point() + geom_smooth(method='lm', formula= y~x)
+```
+```{r}
+merged_df.long <- melt(merged_df_v3, id = "Healthy life expectancy", measure = c("hip_hop"))
+ggplot(merged_df.long, aes(`Healthy life expectancy`, value, colour = variable)) + geom_point() + geom_smooth(method='lm', formula= y~x)
+```
+
+maybe not a linear model? -x^2?
+
+
+```{r}
+simple.reg <- lm(`Logged GDP per capita`~pop, data=merged_df_v3)
+summary(simple.reg)
+```
+
+2. Scraping lyrics off azlyrics.biz
+
+```{r, lyric_func, eval=FALSE}
+
+lyric_scraper <- function(url) {
+  m <- read_lines(url)
+  giveaway <- '<div id="konten"></div>'
+  start <- grep(giveaway, m) + 1
+  end <- grep('<div', m[start[1]:length(m)])[1] + start[1]
+  lyrics <- paste(gsub("<br />|</div>|</p>", "", m[start[1]:end]), collapse = " ")
+  return(lyrics)
+  
+  #TODO: fix end
+}
+
+#TODO add multiple artists
+name_builder <- function(name, artist) {
+  # clean name
+  song_clean  <- tolower(gsub("[[:punct:]]","",name))
+  song_clean  <- gsub("\\s","-",song_clean)
+  # clean artist
+  artist_clean  <- tolower(gsub("[[:punct:]]","",artist))
+  artist_clean  <- gsub("\\s","-",artist_clean)
+  name <- paste(artist_clean, song_clean, sep="-")
+  sep_url <- c("https://azlyrics.biz/", substring(artist_clean, 1, 1), "/", artist_clean, "-lyrics/", name, "-lyrics/")
+  url <- paste(sep_url, collapse = "")
+  return(url)
+}
+```
+
+```{r}
+lyric_scraper(name_builder("Running Up That Hill (A Deal With God)", "kate bush"))
+```
+```{r}
+
+lyric_scraper <- function(url) {
+    out <- tryCatch(
+        {
+            m <- read_lines(url)
+            giveaway <- '<div id="konten"></div>'
+            start <- grep(giveaway, m) + 1
+            end <- grep('<div', m[start[1]:length(m)[1]])[1] + start[1]
+            lyrics <- paste(gsub("<br />|</div>|</p>", "", m[start[1]:end]), collapse = " ")
+            # The return value of `readLines()` is the actual value 
+            # that will be returned in case there is no condition 
+            # (e.g. warning or error). 
+            # You don't need to state the return value via `return()` as code 
+            # in the "try" part is not wrapped inside a function (unlike that
+            # for the condition handlers for warnings and error below)
+        },
+        error=function(cond) {
+            # Choose a return value in case of error
+            message(paste("URL does not seem to exist:", url))
+            message("Here's the original error message:")
+            message(cond)
+            return(NA)
+        },
+        warning=function(cond) {
+
+            # Choose a return value in case of warning
+            message(paste("URL caused a warning:", url))
+            message("Here's the original warning message:")
+            message(cond)
+            return(NULL)
+        },
+        finally={
+        # NOTE:
+        # Here goes everything that should be executed at the end,
+        # regardless of success or error.
+        # If you want more than one expression to be executed, then you 
+        # need to wrap them in curly brackets ({...}); otherwise you could
+        # just have written 'finally=<expression>' 
+            message(paste("Processed URL:", url))
+        }
+    )    
+    return(out)
+}
+```
+
+
+next we will run through all here songs and scrape them of azlyrics:
+```{r, azlyrics, eval=FALSE}
+song <- c(top50country['name'])
+artist <- c(top50country['artists'])
+
+urls <- lapply(song, name_builder, artist)
+```
+```{r}
+urls
+```
+
+
+
+We will now save it to the data file.
+```{r, savelyrics, eval=FALSE}
+adele_data$lyrics <- datalist
+save(adele_data, file = "../data/adele_data.Rdata")
+```
+
+diversity - average distance from songs to what?
+dominant genre to gdp
+locality - hard to do?
+
+testing OECD tests to test for correlation - Nitzan N Eden
+
+```{r}
+# OECD <- read.csv("../data/OECD.csv",  encoding = "UTF-8")
+# OECD %>%
+#   mutate(math.sd = str_replace_all(math.sd, "\\*|\\(|\\)", "")) %>%
+#   mutate(reading.sd = str_replace_all(reading.sd, "\\*|\\(|\\)", "")) %>%
+#   mutate(science.sd = str_replace_all(science.sd, "\\*|\\(|\\)", "")) %>%
+#   mutate(math.sd = as.numeric(math.sd)) %>%
+#   mutate(reading.score = as.numeric(reading.score)) %>%
+#   mutate(reading.sd = as.numeric(reading.sd)) %>%
+#   mutate(science.sd = as.numeric(science.sd)) -> OECD
+# 
+# write.csv(x=OECD, file="../data/OECD_clean")
+OECD <- read.csv("../data/OECD_clean.csv",  encoding = "UTF-8")
+```
+
+```{r}
+merged_df <- merge(rmse.score, OECD, by="country")
+merged_df$rmse.score <- merged_df$rmse.score * 100
+
+merged_df %>%
+  mutate(reading.score = ifelse(is.na(reading.score),
+                            median(reading.score, na.rm = TRUE), 
+                            reading.score)) %>%
+  mutate(reading.sd = ifelse(is.na(reading.sd),
+                            mean(reading.sd, na.rm = TRUE), 
+                            reading.sd)) -> merged_df
+  
+  
+```
+
