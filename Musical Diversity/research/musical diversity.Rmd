@@ -52,7 +52,7 @@ The majority of comparative analyses of human cultural diversity, and musical di
 
 Can music be measured? Music, as an art, is very difficult to quantify. Despite the challenges, in our digital age, quantifying music can help us build very powerful tools, like Spotify's recommendation engine, and better research both music and its effect on human life and culture. 
 
-Measuring musical diversity is a challenge in itself[4]. Different measurements can mean and reflect different things. does it portray within culture segregation? or does it reflect cultural range and flexibility? In our research, we will consider different methods of measuring diversity adopted from the fields of biodiversity, mathematics and cultural research.
+Measuring musical diversity is a challenge in itself[4]. Different measurements can mean and reflect different things. does it portray within culture segregation? or does it reflect cultural range and flexibility? In our research, we will consider different methods of measuring diversity adopted from the fields of mathematics and cultural research.
 
 ## Methods and Data
 ```{r}
