@@ -36,6 +36,7 @@ library(ggradar)
 library(corrplot)
 library(plotly)
 ```
+Project source code: [github.com/AmaruCrunch/Musical_Diversity](https://github.com/AmaruCrunch/Musical_Diversity.git)
 ## Abstract
 Music is one of the most universal way of expression in human life. Music is present in the everyday lives of people of all ages and all cultures around the world. Music is fun, but its influence goes beyond simple enjoyment. Research in music has shown that several dimensions of human life can be positively affected by music[1]. 
 There our many different kinds of music and We all have our music preference. These preference reflect our personality, culture, social circles and exposure. Much research has gone into the affect different genres have on behavior and performance. Research has also portrayed the positive effect of musical diversity and its importance to society[2].
@@ -429,10 +430,7 @@ As previously stated studies have shown a diverse playlist may have a positive e
 11. [Music and Coping](https://core.ac.uk/download/pdf/215262552.pdf)
 12. [Bimusicality and bilingualism: Insights into the nature of complex cognitive faculties](https://www.sibetrans.com/trans/public/docs/trans_16_10.pdf)
 
-## Source code
-```{r, ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
 
-```
 
 
 
