@@ -3,7 +3,7 @@
 E Team - Yonatan, Eden and Nitzan
 This Markdown file describes the research folder structure and organization ...
 
-#### 1. Musical Diversity.Rmdmd
+#### 1. Musical Diversity.Rmd
 File containing all the code for the final draft. knitted into pdf for presentation.
 
 #### 2. proposal_v2.Rmd
